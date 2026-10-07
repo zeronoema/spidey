@@ -74,19 +74,19 @@
 
             // Rocket: rises from the ground, slows down under gravity,
             // and bursts at the apex, leaving a flickering spark trail.
-            function launch(targetX, targetY) {
+            function launch(targetX, targetY, type) {
                 const startX = targetX ?? rand(W * 0.1, W * 0.9);
                 const peakY = targetY ?? rand(H * 0.1, H * 0.45);
                 const height = H - peakY;
                 // v^2 = 2gh -> initial speed needed to reach the peak
                 const vy = -Math.sqrt(2 * GRAVITY * height);
                 rockets.push({
-                    x: startX + rand(-40, 40),
+                    x: type === 'heart' ? startX : startX + rand(-40, 40),
                     y: H,
-                    vx: rand(-0.4, 0.4),
+                    vx: type === 'heart' ? 0 : rand(-0.4, 0.4),
                     vy,
                     hue: rand(0, 360),
-                    type: pick(SHELL_TYPES),
+                    type: type ?? pick(SHELL_TYPES),
                 });
             }
 
@@ -97,6 +97,36 @@
             function explode(r) {
                 const { x, y, hue: baseHue, type } = r;
                 flash = Math.min(1, flash + 0.5);
+
+                if (type === 'heart') {
+                    // Heart outline from the classic parametric curve, plus a softer filled
+                    // inner heart. All stars share the same drag, so the shape holds while it expands.
+                    const scale = 0.33;
+                    const layers = [
+                        { f: 1,    n: 160, hue: 345, size: 2.0 },
+                        { f: 0.7,  n: 90,  hue: 330, size: 1.6 },
+                        { f: 0.4,  n: 50,  hue: 350, size: 1.3 },
+                    ];
+                    for (const l of layers) {
+                        for (let i = 0; i < l.n; i++) {
+                            const t = (i / l.n) * Math.PI * 2;
+                            const hx = 16 * Math.sin(t) ** 3;
+                            const hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+                            const jitter = rand(0.97, 1.03);
+                            addSpark(makeSpark(x, y, hx * scale * l.f * jitter, hy * scale * l.f * jitter, {
+                                hue: l.hue + rand(-6, 6),
+                                sat: 100,
+                                decay: rand(0.006, 0.008),
+                                size: l.size,
+                                drag: 0.955,
+                                gravity: 0.25,
+                                crackle: l.f < 1,
+                            }));
+                        }
+                    }
+                    flash = 1;
+                    return;
+                }
 
                 if (type === 'ring') {
                     // Flat ring tilted at a random angle
@@ -287,7 +317,14 @@
                 }
             });
 
+            // The love firework: a big heart in the middle of the sky every few seconds
+            function launchHeart() {
+                launch(W / 2, H * 0.35, 'heart');
+                setTimeout(launchHeart, 6000);
+            }
+
             for (let i = 0; i < 5; i++) setTimeout(launch, i * 150);
+            setTimeout(launchHeart, 1200);
             scheduleLaunch();
             requestAnimationFrame(frame);
         })();
